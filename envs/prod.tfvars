@@ -1,0 +1,5 @@
+resource_group_name  = "self-app-prod-rg"
+storage_account_name = "self-appprodstore001"
+location             = "East US"
+environment          = "prod"
+sku_tier             = "LRS"
