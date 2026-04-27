@@ -1,0 +1,153 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  TF_VERSION: '1.9.0'
+  SERVICE_CONNECTION: 'sc-prod'
+  BACKEND_RG: 'tfstate-rg'
+  BACKEND_SA: 'addstfstatestore123'
+  BACKEND_CONTAINER: 'self-tfstate'
+
+stages:
+
+# ── DEV ────────────────────────────────────────────────────────────────────────
+- stage: Dev
+  displayName: 'Dev — Init / Plan / Apply'
+  jobs:
+  - job: TerraformDev
+    displayName: 'Terraform Dev'
+    steps:
+
+    - task: TerraformInstaller@1
+      displayName: 'Install Terraform $(TF_VERSION)'
+      inputs:
+        terraformVersion: $(TF_VERSION)
+
+    - task: AzureCLI@2
+      displayName: 'Terraform Init (Dev)'
+      inputs:
+        azureSubscription: $(SERVICE_CONNECTION)
+        scriptType: bash
+        scriptLocation: inlineScript
+        addSpnToEnvironment: true
+        inlineScript: |
+          export ARM_USE_OIDC=true
+          export ARM_OIDC_TOKEN=$idToken
+          export ARM_CLIENT_ID=$servicePrincipalId
+          export ARM_TENANT_ID=$tenantId
+          export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+          terraform init \
+            -backend-config="resource_group_name=$(BACKEND_RG)" \
+            -backend-config="storage_account_name=$(BACKEND_SA)" \
+            -backend-config="container_name=$(BACKEND_CONTAINER)" \
+            -backend-config="key=dev.terraform.tfstate"
+
+    - task: AzureCLI@2
+      displayName: 'Terraform Plan (Dev)'
+      inputs:
+        azureSubscription: $(SERVICE_CONNECTION)
+        scriptType: bash
+        scriptLocation: inlineScript
+        addSpnToEnvironment: true
+        inlineScript: |
+          export ARM_USE_OIDC=true
+          export ARM_OIDC_TOKEN=$idToken
+          export ARM_CLIENT_ID=$servicePrincipalId
+          export ARM_TENANT_ID=$tenantId
+          export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+          terraform plan -var-file=envs/dev.tfvars -out=tfplan-dev
+
+    - task: AzureCLI@2
+      displayName: 'Terraform Apply (Dev)'
+      inputs:
+        azureSubscription: $(SERVICE_CONNECTION)
+        scriptType: bash
+        scriptLocation: inlineScript
+        addSpnToEnvironment: true
+        inlineScript: |
+          export ARM_USE_OIDC=true
+          export ARM_OIDC_TOKEN=$idToken
+          export ARM_CLIENT_ID=$servicePrincipalId
+          export ARM_TENANT_ID=$tenantId
+          export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+          terraform apply -auto-approve tfplan-dev
+
+# ── PROD ───────────────────────────────────────────────────────────────────────
+- stage: Prod
+  displayName: 'Prod — Init / Plan / Apply'
+  dependsOn: Dev
+  jobs:
+  - deployment: TerraformProd
+    displayName: 'Terraform Prod'
+    environment: 'prod'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          - checkout: self
+
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform $(TF_VERSION)'
+            inputs:
+              terraformVersion: $(TF_VERSION)
+
+          - task: AzureCLI@2
+            displayName: 'Terraform Init (Prod)'
+            inputs:
+              azureSubscription: $(SERVICE_CONNECTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              addSpnToEnvironment: true
+              inlineScript: |
+                export ARM_USE_OIDC=true
+                export ARM_OIDC_TOKEN=$idToken
+                export ARM_CLIENT_ID=$servicePrincipalId
+                export ARM_TENANT_ID=$tenantId
+                export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+                terraform init \
+                  -backend-config="resource_group_name=$(BACKEND_RG)" \
+                  -backend-config="storage_account_name=$(BACKEND_SA)" \
+                  -backend-config="container_name=$(BACKEND_CONTAINER)" \
+                  -backend-config="key=prod.terraform.tfstate"
+
+          - task: AzureCLI@2
+            displayName: 'Terraform Plan (Prod)'
+            inputs:
+              azureSubscription: $(SERVICE_CONNECTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              addSpnToEnvironment: true
+              inlineScript: |
+                export ARM_USE_OIDC=true
+                export ARM_OIDC_TOKEN=$idToken
+                export ARM_CLIENT_ID=$servicePrincipalId
+                export ARM_TENANT_ID=$tenantId
+                export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+                terraform plan -var-file=envs/prod.tfvars -out=tfplan-prod
+
+          - task: AzureCLI@2
+            displayName: 'Terraform Apply (Prod)'
+            inputs:
+              azureSubscription: $(SERVICE_CONNECTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              addSpnToEnvironment: true
+              inlineScript: |
+                export ARM_USE_OIDC=true
+                export ARM_OIDC_TOKEN=$idToken
+                export ARM_CLIENT_ID=$servicePrincipalId
+                export ARM_TENANT_ID=$tenantId
+                export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+                terraform apply -auto-approve tfplan-prod

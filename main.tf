@@ -6,19 +6,14 @@ terraform {
     }
   }
 
-  backend "azurerm" {
-    resource_group_name  = "tfstate-rg"
-    storage_account_name = "addstfstatestore123"
-    container_name       = "self-tfstate"
-    key                  = "terraform.tfstate"
-  }
+  backend "azurerm" {}
 }
 
 provider "azurerm" {
   features {}
+  use_oidc = true
 }
 
-# Resource Group
 resource "azurerm_resource_group" "main" {
   name     = var.resource_group_name
   location = var.location
@@ -28,7 +23,6 @@ resource "azurerm_resource_group" "main" {
   }
 }
 
-# Storage Account
 resource "azurerm_storage_account" "main" {
   name                     = var.storage_account_name
   resource_group_name      = azurerm_resource_group.main.name
