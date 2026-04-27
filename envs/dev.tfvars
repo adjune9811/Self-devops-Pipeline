@@ -1,0 +1,5 @@
+resource_group_name  = "self-app-dev-rg"
+storage_account_name = "self-appdevstore001"
+location             = "East US"
+environment          = "dev"
+sku_tier             = "LRS"
